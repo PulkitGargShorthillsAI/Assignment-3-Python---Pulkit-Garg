@@ -1,23 +1,51 @@
-import pypdf
-class FileLoader:
-    pass
-
 import fitz
 import pdfplumber
 import pandas as pd
 
-def extract_tables_pdfplumber(pdf_path):
-    tables = []
+class FileStorage:
+    pass
+
+class SQLStorage:
+    pass
+
+class DataExtractor:
+    pass
+
+class FileLoader:
+    pass
+
+class PDFLoader:
+    pass
+
+class DOCXLoader:
+    pass
+
+class PPTLoader:
+    pass
+
+
+
+def extract_tables_with_metadata(pdf_path):
+    tables_with_metadata = []
+    
     with pdfplumber.open(pdf_path) as pdf:
         for page_num, page in enumerate(pdf.pages, start=1):
             extracted_table = page.extract_table()
+            
             if extracted_table:
                 df = pd.DataFrame(extracted_table[1:], columns=extracted_table[0])  # Convert to DataFrame
-                tables.append((page_num, df))
+                
+                # Collect metadata
+                table_metadata = {
+                    "page_number": page_num,
+                    "num_rows": len(df),
+                    "num_columns": len(df.columns),
+                    "dataframe": df
+                }
+                
+                tables_with_metadata.append(table_metadata)
 
-    return tables
-
-
+    return tables_with_metadata
 
 
 
@@ -68,7 +96,12 @@ def extract_tables_pymupdf(pdf_path):
 
     return tables
 
-
+def extract_metadata_from_pdf(pdf_path):
+    doc = fitz.open(pdf_path)
+    metadata = doc.metadata  # Extract metadata
+    metadata['creationDate'] = metadata['creationDate'][8:10] + "-" + metadata['creationDate'][6:8] + "-" + metadata['creationDate'][2:6]
+    metadata['modDate'] = metadata['modDate'][8:10] + "-" + metadata['modDate'][6:8] + "-" + metadata['modDate'][2:6]
+    return metadata
    
 
 pdf_path = "sample_pdfs/Employee Information Sheet.pdf"  # Replace with your PDF file
@@ -80,8 +113,13 @@ pdf_text = extract_text_pymupdf(pdf_path)
 print(pdf_text)
 
 
-tables = extract_tables_pdfplumber(pdf_path)
+tables = extract_tables_with_metadata(pdf_path)
 
 # Print extracted tables
-for page, df in tables:
-    print(f"Table from Page {page}:\n", df, "\n")
+for table in tables:
+    print(f"Table found on Page {table['page_number']}:")
+    print(f"Rows: {table['num_rows']}, Columns: {table['num_columns']}")
+    print(table["dataframe"], "\n")
+
+
+print(extract_metadata_from_pdf(pdf_path))
