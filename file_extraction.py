@@ -8,11 +8,29 @@ class FileStorage:
 class SQLStorage:
     pass
 
-class DataExtractor:
+class FileLoader:
+
+    def validation():
+        pass
+
+    def load_file():
+        pass
     pass
 
-class FileLoader:
+class DataExtractor:
+
+    def __init__(self,loader : FileLoader):
+        pass
+    def extract_text():
+        pass
+    def extract_links():
+        pass
+    def extract_tables():
+        pass
+    def extract_images():
+        pass
     pass
+
 
 class PDFLoader:
     pass
