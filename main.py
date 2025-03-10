@@ -69,7 +69,7 @@ class DataExtractor:
 
     def extract_text(self):
         extracted_text = []
-        
+
         if isinstance(self.file_loader, fitz.Document):  # PDF
             for page_num, page in enumerate(self.file_loader, start=1):
                 page_data = {"page_number": page_num, "text": [], "metadata": []}
@@ -82,68 +82,102 @@ class DataExtractor:
                             for span in line["spans"]:  # Spans contain individual text segments
                                 text_content = span["text"].strip()
                                 if text_content:
+                                    font_name = span["font"]  # Extract font name
                                     page_data["text"].append(text_content)
                                     page_data["metadata"].append({
                                         "text": text_content,
                                         "font_size": span["size"],
-                                        "bold": "Bold" in span["font"],
-                                        "italic": "Italic" in span["font"]
+                                        "bold": "Bold" in font_name,
+                                        "italic": "Italic" in font_name,
+                                        "font_style": font_name  # Store font style
                                     })
                 
                 extracted_text.append(page_data)
 
         elif isinstance(self.file_loader, docx.document.Document):  # DOCX
             page_data = {"text": [], "metadata": []}
-            
-            for para in self.file_loader.paragraphs:
+
+            for para_num, para in enumerate(self.file_loader.paragraphs, start=1):
                 text_content = para.text.strip()
-                if text_content:
+                if text_content:  # Ensure there is actual text
                     font_size = None
                     is_bold = False
                     is_italic = False
-                    
-                    if para.runs:
-                        font_size = para.runs[0].font.size.pt if para.runs[0].font.size else None
-                        is_bold = para.runs[0].bold
-                        is_italic = para.runs[0].italic
-                    
-                    is_heading = para.style.name.startswith("Heading")
-                    
+                    font_style = None
+
+                    if para.runs:  # Ensure the paragraph has runs before accessing them
+                        first_run = para.runs[0]  # Access the first run safely
+                        
+                        # Try to get font size from run, else fallback to paragraph style
+                        if first_run.font.size:
+                            font_size = first_run.font.size.pt  # Convert to points
+                        elif para.style and para.style.font and para.style.font.size:
+                            font_size = para.style.font.size.pt  # Fallback to paragraph font size
+                        
+                        is_bold = first_run.bold if first_run.bold is not None else False
+                        is_italic = first_run.italic if first_run.italic is not None else False
+                        
+                        # Extract font style
+                        if first_run.font and first_run.font.name:
+                            font_style = first_run.font.name
+
+                    is_heading = para.style.name.startswith("Heading") if para.style else False
+
                     page_data["text"].append(text_content)
                     page_data["metadata"].append({
+                        "paragraph_number": para_num,
                         "text": text_content,
                         "font_size": font_size,
                         "bold": is_bold,
                         "italic": is_italic,
-                        "heading": is_heading
+                        "heading": is_heading,
+                        "font_style": font_style  # Store font style
                     })
-            
+
             extracted_text.append(page_data)
 
         elif isinstance(self.file_loader, pptx.presentation.Presentation):  # PPTX
             for slide_num, slide in enumerate(self.file_loader.slides, start=1):
                 slide_data = {"slide_number": slide_num, "text": [], "metadata": []}
+                para_num = 1  # Track paragraph number across slides
                 
                 for shape in slide.shapes:
                     if hasattr(shape, "text_frame") and shape.text_frame:
                         for para in shape.text_frame.paragraphs:
                             text_content = para.text.strip()
                             if text_content:
-                                font_size = para.runs[0].font.size.pt if para.runs and para.runs[0].font.size else None
+                                font_size = None
+                                is_bold = False
+                                is_italic = False
+                                font_style = None
                                 
+                                if para.runs:  # Ensure paragraph has runs
+                                    first_run = para.runs[0]
+                                    if first_run.font and first_run.font.size:
+                                        font_size = first_run.font.size.pt
+                                    if first_run.font:
+                                        is_bold = first_run.font.bold if first_run.font.bold is not None else False
+                                        is_italic = first_run.font.italic if first_run.font.italic is not None else False
+                                        font_style = first_run.font.name if first_run.font.name else None  # Extract font name
+                                    
                                 slide_data["text"].append(text_content)
                                 slide_data["metadata"].append({
+                                    "slide_number": slide_num,
+                                    "paragraph_number": para_num,
                                     "text": text_content,
                                     "font_size": font_size,
+                                    "bold": is_bold,
+                                    "italic": is_italic,
+                                    "font_style": font_style  # Store font style
                                 })
-                
+                                para_num += 1  # Increment paragraph number
+                    
                 extracted_text.append(slide_data)
-        
+
         return extracted_text
 
 
 
-    
 
 
     def extract_links(self):
@@ -158,8 +192,6 @@ class DataExtractor:
                     links.append(self.file_loader.part.rels[rel].target_ref)
         elif isinstance(self.file_loader,pptx.presentation.Presentation):
             prs = self.file_loader
-            links = []
-
             for slide_num, slide in enumerate(prs.slides, start=1):
                 for shape in slide.shapes:
                     if shape.has_text_frame:
@@ -167,8 +199,7 @@ class DataExtractor:
                             for run in para.runs:
                                 if run.hyperlink and run.hyperlink.address:
                                     links.append({"slide_number": slide_num, "link": run.hyperlink.address})
-            
-            return links
+
         return links
 
     
@@ -284,26 +315,36 @@ class DataExtractor:
         return tables_with_metadata
 
 
-# Abstract storage class
 class Storage(ABC):
     @abstractmethod
-    def store(self, data):
+    def store(self, extractor: DataExtractor):
         pass
 
-# Concrete class for file storage
-class FileStorage(Storage):
-    def store(self, data):
-        if isinstance(data, str):
-            with open("extracted_text.txt", "w", encoding="utf-8") as f:
-                f.write(data)
-        elif isinstance(data, list):
-            for i, item in enumerate(data):
-                if isinstance(item, pd.DataFrame):
-                    item.to_csv(f"extracted_table_{i}.csv", index=False)
-                else:
-                    with open(f"extracted_data_{i}.txt", "w", encoding="utf-8") as f:
-                        f.write(str(item))
 
+class FileStorage(Storage):
+    def store(self, extractor: DataExtractor):
+        text = extractor.extract_text()
+        links = extractor.extract_links()
+        images = extractor.extract_images()
+        tables = extractor.extract_tables()
+
+        # Store extracted text
+        with open("extracted_text.txt", "w", encoding="utf-8") as f:
+            f.write(json.dumps(text, indent=4))
+
+        # Store extracted links
+        with open("extracted_links.txt", "w", encoding="utf-8") as f:
+            f.write(json.dumps(links, indent=4))
+
+        # Store extracted images metadata
+        with open("extracted_images.txt", "w", encoding="utf-8") as f:
+            f.write(json.dumps(images, indent=4))
+
+        # Store extracted tables
+        for i, table in enumerate(tables):
+            table.to_csv(f"extracted_table_{i}.csv", index=False)
+
+        print("Data stored in files successfully.")
 
 
 class SQLStorage(Storage):
@@ -327,13 +368,18 @@ class SQLStorage(Storage):
         """)
         self.conn.commit()
 
-    def store(self, file_name, text, links, tables, images):
+    def store(self, extractor: DataExtractor):
+        file_name = os.path.basename(extractor.file_path)
+        text = extractor.extract_text()
+        links = extractor.extract_links()
+        images = extractor.extract_images()
+        tables = extractor.extract_tables()
+
         # Convert lists/dicts to JSON for storage
         links_json = json.dumps(links, default=str) if links else "[]"
         tables_json = json.dumps([df.to_dict(orient="records") for df in tables], default=str) if tables else "[]"
         images_json = json.dumps(images, default=str) if images else "[]"
-
-        text_str = json.dumps(text, default=str)  # Convert list to JSON string
+        text_str = json.dumps(text, default=str)
 
         self.cursor.execute("""
         INSERT INTO extracted_data (file_name, text_content, links, tables, images)
@@ -341,12 +387,14 @@ class SQLStorage(Storage):
         """, (file_name, text_str, links_json, tables_json, images_json))
         
         self.conn.commit()
+        print("Data stored in MySQL successfully.")
+
 
 # Main function for testing
 def main():
-    # file_path = "sample_pdfs/test1.pdf"
-    file_path = "sample_docx/demo.docx"  # Change this to test different file types
-    # file_path = "sample_pptx/ppt_test.pptx"
+    file_path = "assets/sample_pdfs/test1.pdf"
+    # file_path = "assets/sample_docx/demo.docx"  # Change this to test different file types
+    # file_path = "assets/sample_pptx/ppt_test.pptx"
 
 
     if file_path.endswith(".pdf"):
@@ -372,167 +420,13 @@ def main():
     
     
     file_storage = FileStorage()
-    mysql_storage = SQLStorage()
+    sql_storage = SQLStorage()
     
     # Store in File Storage
-    file_storage.store(text)
-    file_storage.store(tables)
-
-    mysql_storage.store(os.path.basename(file_path), text, links, tables, images)
+    file_storage.store(extractor)
+    sql_storage.store(extractor)
     
     print("Data stored successfully.")
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Concrete class for MySQL storage
-# class SQLStorage(Storage):
-#     def __init__(self, host="localhost", user="root", password="rootroot", database="assignment3"):
-#         self.conn = mysql.connector.connect(
-#             host=host, user=user, password=password, database=database
-#         )
-#         self.cursor = self.conn.cursor()
-#         self.create_tables()
-
-#     def create_tables(self):
-#         self.cursor.execute("""
-#         CREATE TABLE IF NOT EXISTS extracted_text (
-#             id INT AUTO_INCREMENT PRIMARY KEY,
-#             content TEXT
-#         )
-#         """)
-#         self.cursor.execute("""
-#         CREATE TABLE IF NOT EXISTS extracted_tables (
-#             id INT AUTO_INCREMENT PRIMARY KEY,
-#             source VARCHAR(10),
-#             table_data JSON
-#         )
-#         """)
-#         self.conn.commit()
-
-#     def store(self, data):
-#         if isinstance(data, str):  # Store extracted text
-#             self.cursor.execute("INSERT INTO extracted_text (content) VALUES (%s)", (data,))
-        
-#         elif isinstance(data, list):  # Store extracted tables
-#             for item in data:
-#                 if isinstance(item, pd.DataFrame):  # Store DataFrame from PDF/DOCX
-#                     table_json = item.to_json(orient="records")  # Convert DataFrame to JSON
-#                     self.cursor.execute("INSERT INTO extracted_tables (source, table_data) VALUES (%s, %s)", ("docx", table_json))
-#                 elif isinstance(item, dict):  # Store PPT tables
-#                     table_json = json.dumps(item, default=str)  # Convert dictionary to JSON
-#                     self.cursor.execute("INSERT INTO extracted_tables (source, table_data) VALUES (%s, %s)", ("ppt/pdf", table_json))
-    
-#         self.conn.commit()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # def extract_text(self):
-    #     extracted_text = ""
-
-    #     if isinstance(self.file_loader, fitz.Document):  # PDF
-    #         for page_num, page in enumerate(self.file_loader, start=1):
-    #             extracted_text += f"\n--- Page {page_num} ---\n"
-    #             extracted_text += page.get_text("text") + "\n"
-
-    #     elif isinstance(self.file_loader, docx.document.Document):  # DOCX
-    #         extracted_text += "\n--- DOCX Content ---\n"
-    #         for i, para in enumerate(self.file_loader.paragraphs, start=1):
-    #             extracted_text += f"\n--- Paragraph {i} ---\n{para.text}\n"
-
-    #     elif isinstance(self.file_loader, pptx.presentation.Presentation):  # PPTX
-    #         for slide_num, slide in enumerate(self.file_loader.slides, start=1):
-    #             extracted_text += f"\n--- Slide {slide_num} ---\n"
-    #             for shape in slide.shapes:
-    #                 if hasattr(shape, "text") and shape.text.strip():
-    #                     extracted_text += shape.text + "\n"
-
-    #     return extracted_text
