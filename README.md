@@ -154,10 +154,14 @@ The test cases in `testing.py` validate the functionality of the program:
 ---
 
 ## Screenshots
+  - Text extraction with Metadata
   - ![alt text](<out_put_images/text_with_metadata.png>)
 
+  - File information and extracted data stored in sql database
   - ![alt text](<out_put_images/extracted_data_stored_in_sql_db.png>)
 
+
+  - Succesfully done unit testing all unit tests passed
   - ![alt text](<out_put_images/unit_testing_successful.png>)
 
 ---
