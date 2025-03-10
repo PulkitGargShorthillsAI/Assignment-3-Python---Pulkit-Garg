@@ -154,8 +154,11 @@ The test cases in `testing.py` validate the functionality of the program:
 ---
 
 ## Screenshots
+  - ![alt text](<out_put_images/extracted_data_stored_in_sql_db.png>)
 
-- 
+  - ![alt text](<out_put_images/extracted_data_stored_in_sql_db.png>)
+
+  - ![alt text](<out_put_images/unit_testing_successful.png>)
 
 ---
 
