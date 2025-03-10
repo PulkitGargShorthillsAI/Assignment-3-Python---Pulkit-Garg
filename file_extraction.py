@@ -2,6 +2,9 @@ import fitz
 import pdfplumber
 import pandas as pd
 
+class Storage:
+    pass
+
 class FileStorage:
     pass
 
@@ -32,13 +35,13 @@ class DataExtractor:
     pass
 
 
-class PDFLoader:
+class PDFLoader(FileLoader):
     pass
 
-class DOCXLoader:
+class DOCXLoader(FileLoader):
     pass
 
-class PPTLoader:
+class PPTLoader(FileLoader):
     pass
 
 

@@ -74,7 +74,7 @@ def extract_links(ppt_path):
     return links
 
 # Example usage
-ppt_path = "ch1.pptx"  # Replace with your PowerPoint file
+ppt_path = "ppt_test.pptx"  # Replace with your PowerPoint file
 output_folder = "ppt_images"
 
 # Extract text
@@ -89,11 +89,13 @@ print("Extracted Images:", images)
 
 # Extract tables
 tables = extract_tables(ppt_path)
+print("Extracted Tables : ")
 for table in tables:
     print(f"Table on Slide {table['slide_number']}: Rows={table['num_rows']}, Columns={table['num_columns']}")
     for row in table["data"]:
         print(row)
     print()
+
 
 # Extract links
 links = extract_links(ppt_path)
